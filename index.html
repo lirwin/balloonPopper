@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Balloon Popper</title>
+    <link rel="stylesheet" href="../css/style.css">
+  </head>
+  <body>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <p>Balloon Hits</p>
+    <textarea id="log"></textarea>
+
+    <script src="../js/utils.js"></script>
+    <script src="../js/howler.min.js"></script>
+    <script src="steeringBehavior.js"></script>        
+    <script>
+    "use strict";
+    window.onload = function(){
+        // global variables
+        var canvas = document.getElementById( 'canvas' ),
+            context = canvas.getContext( '2d' ),
+            background = "#DEEFFA",
+            mouse = utils.captureMouse(canvas),
+            log = document.getElementById('log');
+            
+        var request;
+        var wanderWeight = 10;
+        var arriveWeight = 0.21;
+                
+        var numBalls = 15;
+        var bounce = -0.5;
+        var spring = 0.05;
+        var gravity = 0.5;
+        var ballStretch = 1.25;
+        var friction = 0.9;
+        
+        var balls = [];    
+        var numStringPts = 3;
+        var ballHits = 0;
+        
+        var particles = [];
+        var particleSize = 10;
+        var minParticleSpeed = 4;
+        var maxParticleSpeed = 12;
+        var numParticlesPerEnemy = 8;
+                 
+        var ambientSound = new Howl({
+          urls: ['../js/wind.mp3'],
+          volume: 0.1
+        });
+       
+        var popSound = new Howl({
+          urls: ['../js/balloonPop.mp3'],
+        });
+
+        log.value = 0;
+        
+        function playAmbient(){
+           ambientSound.play(); 
+        }
+        
+        function drawBoard( context ){
+          context.save();
+          context.lineWidth = 4;
+          context.fillStyle = background;
+          context.strokeStyle = "black";          
+          context.fillRect( 0, 0, canvas.width, canvas.height );
+          context.strokeRect( 0, 0, canvas.width, canvas.height );          
+          context.restore();
+        }         
+        
+        // create balls array        
+        for ( var i = 0; i < numBalls; ++i ) {
+                                                
+            var ball = new Boid({
+              maxSpeed: 3,
+              maxAcceleration: 0.25,
+              behaviors: new Wander({
+                wanderAngle: Math.random() * 10,
+                wanderChange: 2,
+                circleRadius: 35
+              }),
+              x: Math.random() * canvas.width,
+              y: Math.random() * canvas.height - canvas.height / 2,
+              vx: Math.random() - 0.5,
+              vy: Math.random() - 0.5,
+              xScale: 1,
+              yScale: ballStretch,
+              gravity: gravity,
+              bounce: bounce,
+              friction: friction,
+              spring: spring,              
+              radius: 35,
+              graphicsForDrawing: {
+                context: context,            
+                lineWidth: 1,
+                fillStyle: utils.parseColor( Math.random() * 0xffffff )
+                }
+            }); 
+            ball.stringPoints = ball.getStringPoints( numStringPts, context );                           
+            balls.push( ball );
+        }
+          
+        // check collision 
+        
+        function checkCollision( ball, i ){
+            var range = ball.radius * 2 * ballStretch - 10;
+            var distance, toTarget, a, t;
+            
+            for ( var j = i + 1;  j < numBalls; j++ ){
+                var nextBall = balls[ j ];
+                
+                if ( nextBall ){
+                    distance = ball.position().distance( nextBall.position() );
+                    toTarget = ball.position().cloneVector().subtract( nextBall.position() );              
+            
+                    if ( distance < range ) {                  
+                        t = ball.position().cloneVector();
+                        t.add( toTarget.normalize().multiply( range ) );
+                        
+                        a = t.subtract( nextBall.position() ).multiply( spring );
+                        nextBall.velocity().subtract( a );
+                        ball.velocity().add( a );
+                    }                                                           
+                }               
+            }                              
+        } 
+        
+        
+         function popBalloon( enemy ) {
+            for (var i = 0; i < numParticlesPerEnemy; ++i) {
+            
+                var randomAngle = Math.random() * 2 * Math.PI;
+                var speed = utils.getRandomInt( minParticleSpeed, maxParticleSpeed );
+                        
+                var particle = new Boid ({
+                    maxSpeed: 3,
+                    maxAcceleration: 0.25,
+                    gravity: gravity,
+                    behaviors: new Wander({
+                        wanderAngle: Math.random() * 5,
+                        wanderChange: 2,
+                        circleRadius: 10
+                    }),
+                    x: enemy.x,
+                    y: enemy.y, 
+                    vx: Math.cos(randomAngle) * speed,
+                    vy: Math.sin(randomAngle) * speed, 
+                    radius: particleSize / 2, 
+                    graphicsForDrawing: {
+                        context: context,            
+                        lineWidth: 1,
+                        fillStyle: enemy.graphicsForDrawing.fillStyle
+                    }       
+                });
+                particles.push(particle);
+            }
+        }
+
+        function updateParticles() {
+            for ( var i = particles.length - 1; i >= 0; --i ) {
+                particles[ i ].update();   
+                particles[ i ].draw();
+                // remove bullets that have disappeared off the screen
+                if ( ! utils.containsPoint( { x: 0, y: 0, width: canvas.width, height: canvas.height }, particles[ i ].x, particles[ i ].y ) ) {
+                    particles.splice( i, 1 );
+                }
+            }
+        }
+                 
+        
+        canvas.addEventListener( 'mousedown', onMouseDown, false); 
+        
+           
+        function onMouseDown(){
+            for ( var i = 0; i < numBalls; i++){
+                if ( balls[ i ]  && utils.containsPoint( balls[ i ].getBounds(), mouse.x, mouse.y )){                           
+                  ballHits += 1;
+                  log.value = ballHits;
+                  popSound.play();
+                  // pop the balloon!
+                  popBalloon( balls[ i ] );
+                  balls.splice( i, 1 );
+                  return;
+                } 
+            }                              
+        }         
+                 
+        function endGame() {
+            var msg;
+            
+            window.clearInterval( playAmbient );
+            window.clearTimeout( endGameTimer );
+            window.cancelRequestAnimationFrame( request );          
+            canvas.removeEventListener('mousedown', onMouseDown);
+            
+            setTimeout(function(){
+                if ( numBalls === ballHits ) {
+                 
+                    msg =  "Congratulations!  You Won!";
+                                  
+                }else {
+                    msg = "Sorry...your time has run out."             
+                }
+                
+                if ( confirm( msg + " Would you like to try again?" ) ) {
+                    location.reload();                    
+                }  
+            },600);
+        }   
+          
+        drawBoard( context );               
+        if ( ! confirm("Pop all the balloons in less than 10s to win!") ){
+            return;
+        } 
+        
+        var endGameTimer = setTimeout( endGame, 10000 );      
+        var playAmbient = setInterval( playAmbient, 2000);
+
+        // game loop         
+        (function tick() {
+            request = window.requestAnimationFrame( tick, canvas );
+            context.clearRect( 0, 0, canvas.width, canvas.height );
+            drawBoard( context ); 
+            
+            for ( var i = 0; i < numBalls; i++){
+                if ( balls[ i ] ){
+                    checkCollision ( balls[ i ], i );                              
+                    balls[ i ].update();
+                    balls[ i ].draw();                   
+                } 
+            }  
+            updateParticles();
+            
+            if ( numBalls === ballHits ){
+                endGame();
+            }            
+           
+        })();                    
+    };
+</script>
+</body>
