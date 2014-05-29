@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8">
     <title>Balloon Popper</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="css/style.css">
   </head>
   <body>
     <canvas id="canvas" width="800" height="600"></canvas>
     <p>Balloon Hits</p>
     <textarea id="log"></textarea>
 
-    <script src="../js/utils.js"></script>
-    <script src="../js/howler.min.js"></script>
-    <script src="steeringBehavior.js"></script>        
+    <script src="js/utils.js"></script>
+    <script src="js/howler.min.js"></script>
+    <script src="js/steeringBehavior.js"></script>        
     <script>
     "use strict";
     window.onload = function(){
@@ -45,12 +45,12 @@
         var numParticlesPerEnemy = 8;
                  
         var ambientSound = new Howl({
-          urls: ['../js/wind.mp3'],
+          urls: ['js/wind.mp3'],
           volume: 0.1
         });
        
         var popSound = new Howl({
-          urls: ['../js/balloonPop.mp3'],
+          urls: ['js/balloonPop.mp3'],
         });
 
         log.value = 0;
